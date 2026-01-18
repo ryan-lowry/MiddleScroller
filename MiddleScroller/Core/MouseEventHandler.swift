@@ -22,6 +22,15 @@ final class MouseEventHandler {
     private var isScrollModeActive = false
     private var anchorPoint: CGPoint = .zero
 
+    // Click passthrough detection
+    private let clickThresholdMs: TimeInterval = 0.300
+    private let movementThresholdPx: CGFloat = 5.0
+
+    private var middleDownLocation: CGPoint?
+    private var clickDecisionTimer: DispatchSourceTimer?
+    private var scrollModeActivatedThisPress = false
+    private var pendingSyntheticEvents = 0  // Count of synthetic events we're expecting
+
     // Store reference to self for the C callback
     private var this: Unmanaged<MouseEventHandler>?
 
@@ -80,6 +89,11 @@ final class MouseEventHandler {
         this?.release()
         this = nil
 
+        // Clean up decision state
+        cancelClickDecisionTimer()
+        resetDecisionState()
+        pendingSyntheticEvents = 0
+
         // Deactivate scroll mode if active
         if isScrollModeActive {
             deactivateScrollMode()
@@ -105,18 +119,37 @@ final class MouseEventHandler {
         case .otherMouseDown:
             // Middle button is button 2
             if buttonNumber == 2 {
-                handleMiddleMouseDown(event: event)
+                print("[DEBUG] otherMouseDown received, pendingSyntheticEvents=\(pendingSyntheticEvents)")
+                // Let synthetic clicks pass through
+                if pendingSyntheticEvents > 0 {
+                    pendingSyntheticEvents -= 1
+                    print("[DEBUG] Letting synthetic mouseDown pass through, remaining=\(pendingSyntheticEvents)")
+                    return Unmanaged.passRetained(event)
+                }
+                startClickDecision(event: event)
                 return nil // Consume the event
             }
 
         case .otherMouseUp:
-            if buttonNumber == 2 && isScrollModeActive {
-                handleMiddleMouseUp(event: event)
-                return nil // Consume the event
+            if buttonNumber == 2 {
+                print("[DEBUG] otherMouseUp received, pendingSyntheticEvents=\(pendingSyntheticEvents), middleDownLocation=\(String(describing: middleDownLocation)), isScrollModeActive=\(isScrollModeActive)")
+                // Let synthetic clicks pass through
+                if pendingSyntheticEvents > 0 {
+                    pendingSyntheticEvents -= 1
+                    print("[DEBUG] Letting synthetic mouseUp pass through, remaining=\(pendingSyntheticEvents)")
+                    return Unmanaged.passRetained(event)
+                }
+                // Handle release during decision phase or scroll mode
+                if middleDownLocation != nil || isScrollModeActive {
+                    print("[DEBUG] Calling handleMiddleMouseUp")
+                    return handleMiddleMouseUp(event: event)
+                }
+                print("[DEBUG] otherMouseUp not handled - letting pass through")
             }
 
         case .mouseMoved, .otherMouseDragged:
-            if isScrollModeActive {
+            // Check for movement during decision phase or update scroll during scroll mode
+            if middleDownLocation != nil || isScrollModeActive {
                 handleMouseMoved(event: event)
             }
 
@@ -127,21 +160,84 @@ final class MouseEventHandler {
         return Unmanaged.passRetained(event)
     }
 
-    private func handleMiddleMouseDown(event: CGEvent) {
-        // Hold mode - activate on mouse down
-        activateScrollMode(at: event.location)
+    private func startClickDecision(event: CGEvent) {
+        // Store the down location for movement detection and synthetic click
+        middleDownLocation = event.location
+        scrollModeActivatedThisPress = false
+        print("[DEBUG] startClickDecision at location=\(event.location)")
+
+        // Start the decision timer
+        cancelClickDecisionTimer()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + clickThresholdMs)
+        timer.setEventHandler { [weak self] in
+            self?.clickThresholdExpired()
+        }
+        clickDecisionTimer = timer
+        timer.resume()
+        print("[DEBUG] Decision timer started for \(clickThresholdMs)s")
     }
 
-    private func handleMiddleMouseUp(event: CGEvent) {
-        // Hold mode - deactivate on mouse up (release)
-        deactivateScrollMode()
+    private func clickThresholdExpired() {
+        print("[DEBUG] clickThresholdExpired called, scrollModeActivatedThisPress=\(scrollModeActivatedThisPress), middleDownLocation=\(String(describing: middleDownLocation))")
+        // Timer fired - activate scroll mode if not already active
+        guard !scrollModeActivatedThisPress, let downLocation = middleDownLocation else {
+            print("[DEBUG] clickThresholdExpired - guard failed, returning early")
+            return
+        }
+
+        print("[DEBUG] Timer expired - activating scroll mode")
+        scrollModeActivatedThisPress = true
+        activateScrollMode(at: downLocation)
+    }
+
+    private func handleMiddleMouseUp(event: CGEvent) -> Unmanaged<CGEvent>? {
+        print("[DEBUG] handleMiddleMouseUp called, scrollModeActivatedThisPress=\(scrollModeActivatedThisPress), middleDownLocation=\(String(describing: middleDownLocation))")
+        // Cancel the decision timer
+        cancelClickDecisionTimer()
+
+        let downLocation = middleDownLocation
+        let wasScrollModeActivated = scrollModeActivatedThisPress
+        resetDecisionState()
+
+        if wasScrollModeActivated {
+            // Was in scroll mode - deactivate and consume the event
+            print("[DEBUG] Was in scroll mode - deactivating and consuming event")
+            deactivateScrollMode()
+            return nil
+        } else if let location = downLocation {
+            // Quick click without scroll activation - post synthetic click
+            print("[DEBUG] Quick click detected - posting synthetic click at \(location)")
+            postSyntheticMiddleClick(at: location)
+            return nil
+        }
+
+        // Shouldn't reach here, but let event pass if we do
+        print("[DEBUG] handleMiddleMouseUp - unexpected state, letting event pass")
+        return Unmanaged.passRetained(event)
     }
 
     private func handleMouseMoved(event: CGEvent) {
-        guard isScrollModeActive else { return }
-
         let currentPoint = event.location
-        scrollController?.updateScroll(from: anchorPoint, to: currentPoint)
+
+        // Check for movement during decision phase
+        if let downLocation = middleDownLocation, !scrollModeActivatedThisPress {
+            let dx = currentPoint.x - downLocation.x
+            let dy = currentPoint.y - downLocation.y
+            let distance = hypot(dx, dy)
+
+            if distance > movementThresholdPx {
+                // Movement threshold exceeded - activate scroll mode
+                cancelClickDecisionTimer()
+                scrollModeActivatedThisPress = true
+                activateScrollMode(at: downLocation)
+            }
+        }
+
+        // Update scrolling if scroll mode is active
+        if isScrollModeActive {
+            scrollController?.updateScroll(from: anchorPoint, to: currentPoint)
+        }
     }
 
     private func activateScrollMode(at point: CGPoint) {
@@ -161,5 +257,48 @@ final class MouseEventHandler {
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.didDeactivateScrollMode()
         }
+    }
+
+    // MARK: - Synthetic Click
+
+    private func postSyntheticMiddleClick(at location: CGPoint) {
+        print("[DEBUG] postSyntheticMiddleClick START at \(location)")
+
+        // Set counter for expected synthetic events (down + up = 2)
+        pendingSyntheticEvents = 2
+        print("[DEBUG] Set pendingSyntheticEvents=\(pendingSyntheticEvents)")
+
+        // Create and post middle mouse down event
+        if let mouseDown = CGEvent(mouseEventSource: nil, mouseType: .otherMouseDown, mouseCursorPosition: location, mouseButton: .center) {
+            print("[DEBUG] Posting synthetic mouseDown")
+            mouseDown.post(tap: .cghidEventTap)
+        } else {
+            print("[DEBUG] ERROR: Failed to create synthetic mouseDown event")
+            pendingSyntheticEvents -= 1
+        }
+
+        // Create and post middle mouse up event
+        if let mouseUp = CGEvent(mouseEventSource: nil, mouseType: .otherMouseUp, mouseCursorPosition: location, mouseButton: .center) {
+            print("[DEBUG] Posting synthetic mouseUp")
+            mouseUp.post(tap: .cghidEventTap)
+        } else {
+            print("[DEBUG] ERROR: Failed to create synthetic mouseUp event")
+            pendingSyntheticEvents -= 1
+        }
+
+        print("[DEBUG] postSyntheticMiddleClick END")
+    }
+
+    // MARK: - Cleanup Helpers
+
+    private func cancelClickDecisionTimer() {
+        clickDecisionTimer?.cancel()
+        clickDecisionTimer = nil
+    }
+
+    private func resetDecisionState() {
+        middleDownLocation = nil
+        scrollModeActivatedThisPress = false
+        // Note: Don't reset pendingSyntheticEvents here - they may still be in flight
     }
 }
