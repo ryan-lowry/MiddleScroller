@@ -14,6 +14,7 @@
 		700A02342F1C919E003E71E9 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 700A02322F1C919E003E71E9 /* Info.plist */; };
 		700A02452F1C9E7D003E71E9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700A02442F1C9E7D003E71E9 /* AppDelegate.swift */; };
 		700A02472F1D2A8A003E71E9 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700A02462F1D2A8A003E71E9 /* main.swift */; };
+		700A02502F1D5000003E71E9 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 700A024F2F1D5000003E71E9 /* AppIcon.icns */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,6 +46,7 @@
 		700A02332F1C919E003E71E9 /* MiddleScroller.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MiddleScroller.entitlements; sourceTree = "<group>"; };
 		700A02442F1C9E7D003E71E9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		700A02462F1D2A8A003E71E9 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		700A024F2F1D5000003E71E9 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -130,6 +132,7 @@
 				700A02332F1C919E003E71E9 /* MiddleScroller.entitlements */,
 				700A02442F1C9E7D003E71E9 /* AppDelegate.swift */,
 				700A02462F1D2A8A003E71E9 /* main.swift */,
+				700A024F2F1D5000003E71E9 /* AppIcon.icns */,
 			);
 			sourceTree = "<group>";
 		};
@@ -280,6 +283,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				700A02342F1C919E003E71E9 /* Info.plist in Resources */,
+				700A02502F1D5000003E71E9 /* AppIcon.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
