@@ -128,18 +128,13 @@ final class MouseEventHandler {
     }
 
     private func handleMiddleMouseDown(event: CGEvent) {
-        if isScrollModeActive {
-            // Second click - deactivate
-            deactivateScrollMode()
-        } else {
-            // First click - activate
-            activateScrollMode(at: event.location)
-        }
+        // Hold mode - activate on mouse down
+        activateScrollMode(at: event.location)
     }
 
     private func handleMiddleMouseUp(event: CGEvent) {
-        // In toggle mode, we don't deactivate on mouse up
-        // The user clicks again to deactivate
+        // Hold mode - deactivate on mouse up (release)
+        deactivateScrollMode()
     }
 
     private func handleMouseMoved(event: CGEvent) {
