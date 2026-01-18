@@ -77,12 +77,16 @@ final class ScrollController {
         guard currentScrollVector != .zero else { return }
 
         // Create and post scroll event
-        let scrollEvent = CGEvent(scrollWheelEvent2Source: nil,
-                                   units: .pixel,
-                                   wheelCount: 2,
-                                   wheel1: Int32(currentScrollVector.dy),
-                                   wheel2: Int32(currentScrollVector.dx),
-                                   wheel3: 0)
-        scrollEvent?.post(tap: CGEventTapLocation.cgSessionEventTap)
+        guard let scrollEvent = CGEvent(scrollWheelEvent2Source: nil,
+                                         units: .pixel,
+                                         wheelCount: 2,
+                                         wheel1: Int32(currentScrollVector.dy),
+                                         wheel2: Int32(currentScrollVector.dx),
+                                         wheel3: 0) else {
+            Logger.debug("Failed to create scroll event")
+            return
+        }
+        
+        scrollEvent.post(tap: CGEventTapLocation.cgSessionEventTap)
     }
 }

@@ -5,11 +5,11 @@
 
 import Cocoa
 
-print("DEBUG: main.swift starting")
+Logger.debug("main.swift starting")
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
 
-print("DEBUG: Starting NSApplication.run()")
+Logger.debug("Starting NSApplication.run()")
 app.run()

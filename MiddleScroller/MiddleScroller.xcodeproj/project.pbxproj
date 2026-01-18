@@ -51,6 +51,7 @@
 		700A021F2F1C90DE003E71E9 /* Exceptions for "Core" folder in "MiddleScroller" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Logger.swift,
 				MouseEventHandler.swift,
 				PermissionsManager.swift,
 				ScrollController.swift,
@@ -60,6 +61,7 @@
 		700A02202F1C90DE003E71E9 /* Exceptions for "Core" folder in "MiddleScrollerUITests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Logger.swift,
 				MouseEventHandler.swift,
 				PermissionsManager.swift,
 				ScrollController.swift,

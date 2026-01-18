@@ -9,6 +9,24 @@ import CoreGraphics
 protocol MouseEventHandlerDelegate: AnyObject {
     func didActivateScrollMode(at point: CGPoint)
     func didDeactivateScrollMode()
+    func didFailToStart(error: MouseEventHandlerError)
+}
+
+enum MouseEventHandlerError: Error {
+    case eventTapCreationFailed
+    case accessibilityPermissionDenied
+    case eventTapDisabled
+    
+    var localizedDescription: String {
+        switch self {
+        case .eventTapCreationFailed:
+            return "Failed to create event tap. The app cannot intercept mouse events."
+        case .accessibilityPermissionDenied:
+            return "Accessibility permission is required for MiddleScroller to work."
+        case .eventTapDisabled:
+            return "Event tap was disabled by the system."
+        }
+    }
 }
 
 final class MouseEventHandler {
@@ -60,9 +78,18 @@ final class MouseEventHandler {
         )
 
         guard let eventTap = eventTap else {
-            print("Failed to create event tap. Check accessibility permissions.")
+            Logger.debug("Failed to create event tap. Check accessibility permissions.")
             this?.release()
             this = nil
+            
+            // Determine the specific error
+            let error: MouseEventHandlerError = PermissionsManager.shared.checkAccessibilityPermissions()
+                ? .eventTapCreationFailed
+                : .accessibilityPermissionDenied
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.delegate?.didFailToStart(error: error)
+            }
             return
         }
 
@@ -119,11 +146,11 @@ final class MouseEventHandler {
         case .otherMouseDown:
             // Middle button is button 2
             if buttonNumber == 2 {
-                print("[DEBUG] otherMouseDown received, pendingSyntheticEvents=\(pendingSyntheticEvents)")
+                Logger.debug("otherMouseDown received, pendingSyntheticEvents=\(pendingSyntheticEvents)")
                 // Let synthetic clicks pass through
                 if pendingSyntheticEvents > 0 {
                     pendingSyntheticEvents -= 1
-                    print("[DEBUG] Letting synthetic mouseDown pass through, remaining=\(pendingSyntheticEvents)")
+                    Logger.debug("Letting synthetic mouseDown pass through, remaining=\(pendingSyntheticEvents)")
                     return Unmanaged.passRetained(event)
                 }
                 startClickDecision(event: event)
@@ -132,19 +159,19 @@ final class MouseEventHandler {
 
         case .otherMouseUp:
             if buttonNumber == 2 {
-                print("[DEBUG] otherMouseUp received, pendingSyntheticEvents=\(pendingSyntheticEvents), middleDownLocation=\(String(describing: middleDownLocation)), isScrollModeActive=\(isScrollModeActive)")
+                Logger.debug("otherMouseUp received, pendingSyntheticEvents=\(pendingSyntheticEvents), middleDownLocation=\(String(describing: middleDownLocation)), isScrollModeActive=\(isScrollModeActive)")
                 // Let synthetic clicks pass through
                 if pendingSyntheticEvents > 0 {
                     pendingSyntheticEvents -= 1
-                    print("[DEBUG] Letting synthetic mouseUp pass through, remaining=\(pendingSyntheticEvents)")
+                    Logger.debug("Letting synthetic mouseUp pass through, remaining=\(pendingSyntheticEvents)")
                     return Unmanaged.passRetained(event)
                 }
                 // Handle release during decision phase or scroll mode
                 if middleDownLocation != nil || isScrollModeActive {
-                    print("[DEBUG] Calling handleMiddleMouseUp")
+                    Logger.debug("Calling handleMiddleMouseUp")
                     return handleMiddleMouseUp(event: event)
                 }
-                print("[DEBUG] otherMouseUp not handled - letting pass through")
+                Logger.debug("otherMouseUp not handled - letting pass through")
             }
 
         case .mouseMoved, .otherMouseDragged:
@@ -164,7 +191,7 @@ final class MouseEventHandler {
         // Store the down location for movement detection and synthetic click
         middleDownLocation = event.location
         scrollModeActivatedThisPress = false
-        print("[DEBUG] startClickDecision at location=\(event.location)")
+        Logger.debug("startClickDecision at location=\(event.location)")
 
         // Start the decision timer
         cancelClickDecisionTimer()
@@ -175,24 +202,24 @@ final class MouseEventHandler {
         }
         clickDecisionTimer = timer
         timer.resume()
-        print("[DEBUG] Decision timer started for \(clickThresholdMs)s")
+        Logger.debug("Decision timer started for \(clickThresholdMs)s")
     }
 
     private func clickThresholdExpired() {
-        print("[DEBUG] clickThresholdExpired called, scrollModeActivatedThisPress=\(scrollModeActivatedThisPress), middleDownLocation=\(String(describing: middleDownLocation))")
+        Logger.debug("clickThresholdExpired called, scrollModeActivatedThisPress=\(scrollModeActivatedThisPress), middleDownLocation=\(String(describing: middleDownLocation))")
         // Timer fired - activate scroll mode if not already active
         guard !scrollModeActivatedThisPress, let downLocation = middleDownLocation else {
-            print("[DEBUG] clickThresholdExpired - guard failed, returning early")
+            Logger.debug("clickThresholdExpired - guard failed, returning early")
             return
         }
 
-        print("[DEBUG] Timer expired - activating scroll mode")
+        Logger.debug("Timer expired - activating scroll mode")
         scrollModeActivatedThisPress = true
         activateScrollMode(at: downLocation)
     }
 
     private func handleMiddleMouseUp(event: CGEvent) -> Unmanaged<CGEvent>? {
-        print("[DEBUG] handleMiddleMouseUp called, scrollModeActivatedThisPress=\(scrollModeActivatedThisPress), middleDownLocation=\(String(describing: middleDownLocation))")
+        Logger.debug("handleMiddleMouseUp called, scrollModeActivatedThisPress=\(scrollModeActivatedThisPress), middleDownLocation=\(String(describing: middleDownLocation))")
         // Cancel the decision timer
         cancelClickDecisionTimer()
 
@@ -202,18 +229,18 @@ final class MouseEventHandler {
 
         if wasScrollModeActivated {
             // Was in scroll mode - deactivate and consume the event
-            print("[DEBUG] Was in scroll mode - deactivating and consuming event")
+            Logger.debug("Was in scroll mode - deactivating and consuming event")
             deactivateScrollMode()
             return nil
         } else if let location = downLocation {
             // Quick click without scroll activation - post synthetic click
-            print("[DEBUG] Quick click detected - posting synthetic click at \(location)")
+            Logger.debug("Quick click detected - posting synthetic click at \(location)")
             postSyntheticMiddleClick(at: location)
             return nil
         }
 
         // Shouldn't reach here, but let event pass if we do
-        print("[DEBUG] handleMiddleMouseUp - unexpected state, letting event pass")
+        Logger.debug("handleMiddleMouseUp - unexpected state, letting event pass")
         return Unmanaged.passRetained(event)
     }
 
@@ -262,31 +289,31 @@ final class MouseEventHandler {
     // MARK: - Synthetic Click
 
     private func postSyntheticMiddleClick(at location: CGPoint) {
-        print("[DEBUG] postSyntheticMiddleClick START at \(location)")
+        Logger.debug("postSyntheticMiddleClick START at \(location)")
 
         // Set counter for expected synthetic events (down + up = 2)
         pendingSyntheticEvents = 2
-        print("[DEBUG] Set pendingSyntheticEvents=\(pendingSyntheticEvents)")
+        Logger.debug("Set pendingSyntheticEvents=\(pendingSyntheticEvents)")
 
         // Create and post middle mouse down event
         if let mouseDown = CGEvent(mouseEventSource: nil, mouseType: .otherMouseDown, mouseCursorPosition: location, mouseButton: .center) {
-            print("[DEBUG] Posting synthetic mouseDown")
+            Logger.debug("Posting synthetic mouseDown")
             mouseDown.post(tap: .cghidEventTap)
         } else {
-            print("[DEBUG] ERROR: Failed to create synthetic mouseDown event")
+            Logger.debug("ERROR: Failed to create synthetic mouseDown event")
             pendingSyntheticEvents -= 1
         }
 
         // Create and post middle mouse up event
         if let mouseUp = CGEvent(mouseEventSource: nil, mouseType: .otherMouseUp, mouseCursorPosition: location, mouseButton: .center) {
-            print("[DEBUG] Posting synthetic mouseUp")
+            Logger.debug("Posting synthetic mouseUp")
             mouseUp.post(tap: .cghidEventTap)
         } else {
-            print("[DEBUG] ERROR: Failed to create synthetic mouseUp event")
+            Logger.debug("ERROR: Failed to create synthetic mouseUp event")
             pendingSyntheticEvents -= 1
         }
 
-        print("[DEBUG] postSyntheticMiddleClick END")
+        Logger.debug("postSyntheticMiddleClick END")
     }
 
     // MARK: - Cleanup Helpers

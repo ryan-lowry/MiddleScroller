@@ -13,21 +13,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionCheckTimer: Timer?
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        print("DEBUG: applicationDidFinishLaunching started")
+        Logger.debug("applicationDidFinishLaunching started")
 
         // Initialize the anchor overlay window
-        print("DEBUG: Initializing anchor overlay window")
+        Logger.debug("Initializing anchor overlay window")
         anchorOverlayWindow = AnchorOverlayWindow()
 
         // Initialize mouse event handler
-        print("DEBUG: Initializing mouse event handler")
+        Logger.debug("Initializing mouse event handler")
         mouseEventHandler = MouseEventHandler()
         mouseEventHandler?.delegate = self
 
         // Initialize status bar
-        print("DEBUG: Initializing status bar controller")
+        Logger.debug("Initializing status bar controller")
         statusBarController = StatusBarController()
-        print("DEBUG: Status bar controller initialized")
+        Logger.debug("Status bar controller initialized")
 
         statusBarController?.onToggleEnabled = { [weak self] enabled in
             if enabled {
@@ -44,31 +44,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Check accessibility permissions and start if granted
         checkPermissionsAndStart()
 
-        print("DEBUG: applicationDidFinishLaunching completed")
+        Logger.debug("applicationDidFinishLaunching completed")
     }
 
     private func checkPermissionsAndStart() {
         let hasPermissions = PermissionsManager.shared.checkAccessibilityPermissions()
-        print("DEBUG: Accessibility permissions: \(hasPermissions)")
+        Logger.debug("Accessibility permissions: \(hasPermissions)")
 
         if hasPermissions {
-            print("DEBUG: Permissions granted, starting mouse event handler")
+            Logger.debug("Permissions granted, starting mouse event handler")
             mouseEventHandler?.start()
             permissionCheckTimer?.invalidate()
             permissionCheckTimer = nil
         } else {
-            print("DEBUG: Requesting accessibility permissions")
+            Logger.debug("Requesting accessibility permissions")
             PermissionsManager.shared.requestAccessibilityPermissions()
 
             // Poll for permissions every 2 seconds
             permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
                 if PermissionsManager.shared.checkAccessibilityPermissions() {
-                    print("DEBUG: Permissions now granted!")
+                    Logger.debug("Permissions now granted!")
                     self?.mouseEventHandler?.start()
                     self?.permissionCheckTimer?.invalidate()
                     self?.permissionCheckTimer = nil
                 } else {
-                    print("DEBUG: Still waiting for permissions...")
+                    Logger.debug("Still waiting for permissions...")
                 }
             }
         }
@@ -95,5 +95,40 @@ extension AppDelegate: MouseEventHandlerDelegate {
 
     func didDeactivateScrollMode() {
         anchorOverlayWindow?.hide()
+    }
+    
+    func didFailToStart(error: MouseEventHandlerError) {
+        Logger.debug("MouseEventHandler failed to start: \(error.localizedDescription)")
+        
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        
+        switch error {
+        case .accessibilityPermissionDenied:
+            alert.messageText = "Accessibility Permission Required"
+            alert.informativeText = "MiddleScroller needs accessibility access to intercept mouse events.\n\nPlease grant access in System Settings > Privacy & Security > Accessibility."
+            alert.addButton(withTitle: "Open System Settings")
+            alert.addButton(withTitle: "Quit")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                PermissionsManager.shared.openAccessibilityPreferences()
+            } else {
+                NSApplication.shared.terminate(nil)
+            }
+            
+        case .eventTapCreationFailed:
+            alert.messageText = "Failed to Start"
+            alert.informativeText = "MiddleScroller could not create an event tap. This may be a system issue.\n\nTry restarting the app or your Mac."
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            NSApplication.shared.terminate(nil)
+            
+        case .eventTapDisabled:
+            alert.messageText = "Event Monitoring Disabled"
+            alert.informativeText = "The system disabled MiddleScroller's event monitoring. This can happen if the app is unresponsive.\n\nThe app will attempt to recover automatically."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
     }
 }

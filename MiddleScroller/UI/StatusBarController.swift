@@ -14,7 +14,7 @@ final class StatusBarController {
     var onQuit: (() -> Void)?
 
     init() {
-        print("DEBUG: StatusBarController init")
+        Logger.debug("StatusBarController init")
         setupStatusBar()
     }
 
@@ -26,19 +26,19 @@ final class StatusBarController {
     }
 
     private func setupStatusBar() {
-        print("DEBUG: Setting up status bar")
+        Logger.debug("Setting up status bar")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        print("DEBUG: Status item created: \(statusItem != nil)")
+        Logger.debug("Status item created: \(statusItem != nil)")
 
         if let button = statusItem?.button {
-            print("DEBUG: Status bar button exists, setting up icon")
+            Logger.debug("Status bar button exists, setting up icon")
             updateIcon()
             button.action = #selector(statusBarButtonClicked(_:))
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            print("DEBUG: Status bar button configured")
+            Logger.debug("Status bar button configured")
         } else {
-            print("DEBUG: ERROR - Status bar button is nil!")
+            Logger.debug("ERROR - Status bar button is nil!")
         }
     }
 
@@ -168,22 +168,22 @@ final class StatusBarController {
     }
 
     private func updateIcon() {
-        print("DEBUG: updateIcon called")
+        Logger.debug("updateIcon called")
         if let button = statusItem?.button {
             // Use SF Symbols for the icon
             let symbolName = isEnabled ? "computermouse.fill" : "computermouse"
-            print("DEBUG: Looking for SF Symbol: \(symbolName)")
+            Logger.debug("Looking for SF Symbol: \(symbolName)")
             if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "MiddleScroller") {
                 let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
                 button.image = image.withSymbolConfiguration(config)
-                print("DEBUG: SF Symbol icon set successfully")
+                Logger.debug("SF Symbol icon set successfully")
             } else {
                 // Fallback text if SF Symbol not available
                 button.title = isEnabled ? "M⬍" : "M"
-                print("DEBUG: Using fallback text icon")
+                Logger.debug("Using fallback text icon")
             }
         } else {
-            print("DEBUG: ERROR - button is nil in updateIcon")
+            Logger.debug("ERROR - button is nil in updateIcon")
         }
     }
 }

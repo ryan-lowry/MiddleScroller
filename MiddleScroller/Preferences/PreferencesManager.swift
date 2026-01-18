@@ -54,13 +54,13 @@ final class PreferencesManager {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                print("Failed to update launch at login: \(error)")
+                Logger.debug("Failed to update launch at login: \(error)")
             }
         } else {
             // Fallback for older macOS versions
             // Note: This uses the deprecated SMLoginItemSetEnabled which requires a helper app
             // For simplicity, we just store the preference - full implementation would need a helper bundle
-            print("Launch at login requires macOS 13.0 or later for automatic setup")
+            Logger.debug("Launch at login requires macOS 13.0 or later for automatic setup")
         }
     }
 }
