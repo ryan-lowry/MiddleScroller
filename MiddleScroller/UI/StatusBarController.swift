@@ -18,6 +18,13 @@ final class StatusBarController {
         setupStatusBar()
     }
 
+    func removeFromStatusBar() {
+        if let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+
     private func setupStatusBar() {
         print("DEBUG: Setting up status bar")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)

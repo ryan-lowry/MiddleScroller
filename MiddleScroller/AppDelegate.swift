@@ -75,7 +75,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
+        permissionCheckTimer?.invalidate()
+        permissionCheckTimer = nil
         mouseEventHandler?.stop()
+        anchorOverlayWindow?.orderOut(nil)
+        statusBarController?.removeFromStatusBar()
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
