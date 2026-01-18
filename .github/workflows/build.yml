@@ -1,0 +1,65 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode.app
+
+    - name: Build
+      run: |
+        cd MiddleScroller
+        xcodebuild -scheme MiddleScroller \
+          -configuration Release \
+          -derivedDataPath build \
+          -destination 'platform=macOS' \
+          build
+
+    - name: Run Tests
+      run: |
+        cd MiddleScroller
+        xcodebuild -scheme MiddleScroller \
+          -destination 'platform=macOS' \
+          test
+
+    - name: Create DMG
+      if: github.event_name == 'release'
+      run: |
+        cd MiddleScroller
+        # Create DMG from the built app
+        hdiutil create -volname "MiddleScroller" \
+          -srcfolder build/Build/Products/Release/MiddleScroller.app \
+          -ov -format UDZO \
+          MiddleScroller.dmg
+        
+        # Show the result
+        ls -la MiddleScroller.dmg
+
+    - name: Upload DMG to Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: MiddleScroller/MiddleScroller.dmg
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Build Artifact
+      if: github.event_name != 'release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: MiddleScroller-app
+        path: MiddleScroller/build/Build/Products/Release/MiddleScroller.app
+        retention-days: 7
