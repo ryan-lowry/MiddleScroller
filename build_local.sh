@@ -19,12 +19,12 @@ xcodebuild -scheme MiddleScroller \
     | grep -A 5 "BUILD SUCCEEDED" || true # Suppress noisy output, show success
 
 # 2. Run Unit Tests (Debug Configuration)
-#echo "🧪  Running Unit Tests..."
-#xcodebuild -scheme MiddleScroller \
-#    -configuration Debug \
-#    -destination 'platform=macOS' \
-#    test \
-#    | grep "Test Suite 'All tests' passed" || true
+echo "🧪  Running Unit Tests..."
+xcodebuild -scheme MiddleScroller \
+    -configuration Debug \
+    -destination 'platform=macOS' \
+    test \
+    | grep "Test Suite 'All tests' passed" || true
 
 # 3. Check for create-dmg
 if ! command -v create-dmg &> /dev/null; then
