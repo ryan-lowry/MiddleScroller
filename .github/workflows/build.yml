@@ -35,17 +35,32 @@ jobs:
           -destination 'platform=macOS' \
           test
 
+    - name: Install create-dmg
+      if: github.event_name == 'release'
+      run: brew install create-dmg
+
     - name: Create DMG
       if: github.event_name == 'release'
       run: |
         cd MiddleScroller
-        # Create DMG from the built app
-        hdiutil create -volname "MiddleScroller" \
-          -srcfolder build/Build/Products/Release/MiddleScroller.app \
-          -ov -format UDZO \
-          MiddleScroller.dmg
-        
-        # Show the result
+
+        # Generate DMG background image
+        swift Resources/generate_dmg_background.swift Resources/dmg-background.png
+
+        create-dmg \
+          --volname "MiddleScroller" \
+          --volicon "AppIcon.icns" \
+          --background "Resources/dmg-background.png" \
+          --window-pos 200 120 \
+          --window-size 660 480 \
+          --icon-size 128 \
+          --icon "MiddleScroller.app" 180 240 \
+          --hide-extension "MiddleScroller.app" \
+          --app-drop-link 480 240 \
+          --no-internet-enable \
+          "MiddleScroller.dmg" \
+          "build/Build/Products/Release/MiddleScroller.app"
+
         ls -la MiddleScroller.dmg
 
     - name: Upload DMG to Release
