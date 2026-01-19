@@ -39,3 +39,8 @@ fastlane/test_output
 
 # Code Injection
 iOSInjectionProject/
+
+# Build artifacts
+*.dmg
+dist/
+dmg-background.png

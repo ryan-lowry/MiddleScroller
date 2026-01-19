@@ -36,7 +36,7 @@ A macOS menu bar application that enables Windows-style middle-click scrolling. 
 
 2. Open the project in Xcode:
    ```bash
-   open MiddleScroller.xcodeproj
+   open MiddleScroller/MiddleScroller.xcodeproj
    ```
 
 3. Build and run (⌘R) or archive for distribution (⌘⇧R)
