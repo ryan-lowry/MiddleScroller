@@ -91,6 +91,13 @@ final class StatusBarController {
             speedMenu.addItem(item)
         }
 
+        speedMenu.addItem(NSMenuItem.separator())
+
+        let dynamicItem = NSMenuItem(title: "Dynamic", action: #selector(toggleDynamicSpeed(_:)), keyEquivalent: "")
+        dynamicItem.target = self
+        dynamicItem.state = PreferencesManager.shared.isDynamicSpeed ? .on : .off
+        speedMenu.addItem(dynamicItem)
+
         speedItem.submenu = speedMenu
         prefsMenu.addItem(speedItem)
 
@@ -144,6 +151,11 @@ final class StatusBarController {
         if let speed = sender.representedObject as? Double {
             PreferencesManager.shared.scrollSpeedMultiplier = speed
         }
+    }
+
+    @objc private func toggleDynamicSpeed(_ sender: NSMenuItem) {
+        let isDynamic = PreferencesManager.shared.isDynamicSpeed
+        PreferencesManager.shared.scrollSpeedMode = isDynamic ? "static" : "dynamic"
     }
 
     @objc private func toggleLaunchAtLogin() {

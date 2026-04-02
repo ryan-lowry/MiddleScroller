@@ -14,6 +14,7 @@ final class PreferencesManager {
 
     private enum Keys {
         static let scrollSpeedMultiplier = "scrollSpeedMultiplier"
+        static let scrollSpeedMode = "scrollSpeedMode"
         static let launchAtLogin = "launchAtLogin"
     }
 
@@ -24,6 +25,7 @@ final class PreferencesManager {
     private func registerDefaults() {
         defaults.register(defaults: [
             Keys.scrollSpeedMultiplier: 1.0,
+            Keys.scrollSpeedMode: "static",
             Keys.launchAtLogin: false
         ])
     }
@@ -33,6 +35,15 @@ final class PreferencesManager {
     var scrollSpeedMultiplier: Double {
         get { defaults.double(forKey: Keys.scrollSpeedMultiplier) }
         set { defaults.set(newValue, forKey: Keys.scrollSpeedMultiplier) }
+    }
+
+    var scrollSpeedMode: String {
+        get { defaults.string(forKey: Keys.scrollSpeedMode) ?? "static" }
+        set { defaults.set(newValue, forKey: Keys.scrollSpeedMode) }
+    }
+
+    var isDynamicSpeed: Bool {
+        scrollSpeedMode == "dynamic"
     }
 
     // MARK: - Launch at Login

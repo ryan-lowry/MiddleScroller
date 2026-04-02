@@ -48,6 +48,7 @@ final class MouseEventHandler {
     private var clickDecisionTimer: DispatchSourceTimer?
     private var scrollModeActivatedThisPress = false
     private var pendingSyntheticEvents = 0  // Count of synthetic events we're expecting
+    private var mouseTrackingTimer: DispatchSourceTimer?
 
     // Store reference to self for the C callback
     private var this: Unmanaged<MouseEventHandler>?
@@ -55,11 +56,12 @@ final class MouseEventHandler {
     func start() {
         guard eventTap == nil else { return }
 
-        // Create event tap for middle mouse button events and mouse movement
+        // Create event tap for middle mouse button events only.
+        // Mouse movement is tracked via NSEvent global monitor to avoid a macOS
+        // IOKit/SkyLight HIDEvent leak that occurs when mouseMoved is tapped at
+        // the CGSession level.
         let eventMask: CGEventMask = (1 << CGEventType.otherMouseDown.rawValue) |
-                                      (1 << CGEventType.otherMouseUp.rawValue) |
-                                      (1 << CGEventType.mouseMoved.rawValue) |
-                                      (1 << CGEventType.otherMouseDragged.rawValue)
+                                      (1 << CGEventType.otherMouseUp.rawValue)
 
         // Store unmanaged reference to self
         this = Unmanaged.passRetained(self)
@@ -70,7 +72,7 @@ final class MouseEventHandler {
             options: .defaultTap,
             eventsOfInterest: eventMask,
             callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon = refcon else { return Unmanaged.passRetained(event) }
+                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
                 let handler = Unmanaged<MouseEventHandler>.fromOpaque(refcon).takeUnretainedValue()
                 return handler.handleEvent(proxy: proxy, type: type, event: event)
             },
@@ -117,6 +119,7 @@ final class MouseEventHandler {
         this = nil
 
         // Clean up decision state
+        stopMouseTracking()
         cancelClickDecisionTimer()
         resetDecisionState()
         pendingSyntheticEvents = 0
@@ -136,7 +139,7 @@ final class MouseEventHandler {
             if let eventTap = eventTap {
                 CGEvent.tapEnable(tap: eventTap, enable: true)
             }
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         // Check if it's a middle mouse button event (button 2)
@@ -151,7 +154,7 @@ final class MouseEventHandler {
                 if pendingSyntheticEvents > 0 {
                     pendingSyntheticEvents -= 1
                     Logger.debug("Letting synthetic mouseDown pass through, remaining=\(pendingSyntheticEvents)")
-                    return Unmanaged.passRetained(event)
+                    return Unmanaged.passUnretained(event)
                 }
                 startClickDecision(event: event)
                 return nil // Consume the event
@@ -164,7 +167,7 @@ final class MouseEventHandler {
                 if pendingSyntheticEvents > 0 {
                     pendingSyntheticEvents -= 1
                     Logger.debug("Letting synthetic mouseUp pass through, remaining=\(pendingSyntheticEvents)")
-                    return Unmanaged.passRetained(event)
+                    return Unmanaged.passUnretained(event)
                 }
                 // Handle release during decision phase or scroll mode
                 if middleDownLocation != nil || isScrollModeActive {
@@ -174,17 +177,11 @@ final class MouseEventHandler {
                 Logger.debug("otherMouseUp not handled - letting pass through")
             }
 
-        case .mouseMoved, .otherMouseDragged:
-            // Check for movement during decision phase or update scroll during scroll mode
-            if middleDownLocation != nil || isScrollModeActive {
-                handleMouseMoved(event: event)
-            }
-
         default:
             break
         }
 
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     private func startClickDecision(event: CGEvent) {
@@ -203,6 +200,8 @@ final class MouseEventHandler {
         clickDecisionTimer = timer
         timer.resume()
         Logger.debug("Decision timer started for \(clickThresholdMs)s")
+
+        startMouseTracking()
     }
 
     private func clickThresholdExpired() {
@@ -235,18 +234,17 @@ final class MouseEventHandler {
         } else if let location = downLocation {
             // Quick click without scroll activation - post synthetic click
             Logger.debug("Quick click detected - posting synthetic click at \(location)")
+            stopMouseTracking()
             postSyntheticMiddleClick(at: location)
             return nil
         }
 
         // Shouldn't reach here, but let event pass if we do
         Logger.debug("handleMiddleMouseUp - unexpected state, letting event pass")
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
-    private func handleMouseMoved(event: CGEvent) {
-        let currentPoint = event.location
-
+    private func handleMouseMoved(at currentPoint: CGPoint) {
         // Check for movement during decision phase
         if let downLocation = middleDownLocation, !scrollModeActivatedThisPress {
             let dx = currentPoint.x - downLocation.x
@@ -279,6 +277,7 @@ final class MouseEventHandler {
 
     private func deactivateScrollMode() {
         isScrollModeActive = false
+        stopMouseTracking()
         scrollController?.stop()
 
         DispatchQueue.main.async { [weak self] in
@@ -314,6 +313,31 @@ final class MouseEventHandler {
         }
 
         Logger.debug("postSyntheticMiddleClick END")
+    }
+
+    // MARK: - Mouse Tracking
+
+    private func startMouseTracking() {
+        guard mouseTrackingTimer == nil else { return }
+        // Poll NSEvent.mouseLocation at 60 Hz rather than subscribing to mouseMoved events.
+        // NSEvent global monitors and CGEventTap both route through the SkyLight/IOKit
+        // pipeline and cause a HIDEvent leak on macOS; polling avoids that entirely.
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: 1.0 / 60.0)
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            // Convert NSEvent (Cocoa: Y=0 at bottom) to CGEvent coordinates (Y=0 at top)
+            let loc = NSEvent.mouseLocation
+            let screenHeight = NSScreen.screens.first?.frame.height ?? 0
+            self.handleMouseMoved(at: CGPoint(x: loc.x, y: screenHeight - loc.y))
+        }
+        mouseTrackingTimer = timer
+        timer.resume()
+    }
+
+    private func stopMouseTracking() {
+        mouseTrackingTimer?.cancel()
+        mouseTrackingTimer = nil
     }
 
     // MARK: - Cleanup Helpers

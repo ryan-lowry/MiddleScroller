@@ -76,14 +76,62 @@ final class PreferencesManagerTests: XCTestCase {
     func testLaunchAtLoginToggle() throws {
         let manager = PreferencesManager.shared
         let originalValue = manager.launchAtLogin
-        
+
         // Toggle to opposite
         manager.launchAtLogin = !originalValue
         XCTAssertEqual(manager.launchAtLogin, !originalValue, "launchAtLogin should toggle")
-        
+
         // Toggle back
         manager.launchAtLogin = originalValue
         XCTAssertEqual(manager.launchAtLogin, originalValue, "launchAtLogin should restore")
+    }
+
+    // MARK: - Scroll Speed Mode Tests
+
+    func testScrollSpeedModeDefaultValue() throws {
+        let manager = PreferencesManager.shared
+        let originalMode = manager.scrollSpeedMode
+
+        // Reset to test default behavior
+        UserDefaults.standard.removeObject(forKey: "scrollSpeedMode")
+
+        // Default should be "static"
+        XCTAssertEqual(manager.scrollSpeedMode, "static", "Default scroll speed mode should be 'static'")
+
+        // Restore original
+        manager.scrollSpeedMode = originalMode
+    }
+
+    func testScrollSpeedModePersistence() throws {
+        let manager = PreferencesManager.shared
+        let originalMode = manager.scrollSpeedMode
+
+        // Set to dynamic
+        manager.scrollSpeedMode = "dynamic"
+        XCTAssertEqual(manager.scrollSpeedMode, "dynamic", "Scroll speed mode should persist as 'dynamic'")
+
+        // Set back to static
+        manager.scrollSpeedMode = "static"
+        XCTAssertEqual(manager.scrollSpeedMode, "static", "Scroll speed mode should persist as 'static'")
+
+        // Restore original
+        manager.scrollSpeedMode = originalMode
+    }
+
+    func testIsDynamicSpeedComputedProperty() throws {
+        let manager = PreferencesManager.shared
+        let originalMode = manager.scrollSpeedMode
+
+        // Test static mode
+        manager.scrollSpeedMode = "static"
+        XCTAssertFalse(manager.isDynamicSpeed, "isDynamicSpeed should be false when mode is 'static'")
+
+        // Test dynamic mode
+        manager.scrollSpeedMode = "dynamic"
+        XCTAssertTrue(manager.isDynamicSpeed, "isDynamicSpeed should be true when mode is 'dynamic'")
+
+        // Restore original
+        manager.scrollSpeedMode = originalMode
     }
 }
 
@@ -189,12 +237,54 @@ final class ScrollControllerTests: XCTestCase {
         // When horizontal movement dominates, vertical should be suppressed
         let anchor = CGPoint(x: 100, y: 100)
         let horizontalDominant = CGPoint(x: 200, y: 110) // dx=100, dy=10
-        
+
         let dx = abs(horizontalDominant.x - anchor.x)
         let dy = abs(horizontalDominant.y - anchor.y)
-        
+
         // If dy < dx * 0.5, vertical scroll should be zeroed
         XCTAssertLessThan(dy, dx * 0.5, "Vertical component should be suppressed when horizontal dominates")
+    }
+
+    // MARK: - Dynamic Speed Mode Tests
+
+    func testStaticModeScaleFactorCapping() throws {
+        // In static mode, scale factor should be capped at 1.0
+        let effectiveDistance: CGFloat = 500.0 // Very far from anchor
+        let maxScale: CGFloat = 1.0 // Static mode cap
+
+        let scaleFactor = min(effectiveDistance / 100.0, maxScale)
+        XCTAssertEqual(scaleFactor, 1.0, accuracy: 0.001, "Static mode scale factor should be capped at 1.0")
+    }
+
+    func testDynamicModeScaleFactorGrowth() throws {
+        // In dynamic mode, scale factor can grow up to 10.0
+        let effectiveDistance: CGFloat = 500.0 // 500px from dead zone edge
+        let maxScale: CGFloat = 10.0 // Dynamic mode cap
+
+        let scaleFactor = min(effectiveDistance / 100.0, maxScale)
+        XCTAssertEqual(scaleFactor, 5.0, accuracy: 0.001, "Dynamic mode scale factor should be 5.0 at 500px")
+    }
+
+    func testDynamicModeScaleFactorCapping() throws {
+        // In dynamic mode, scale factor should cap at 10.0
+        let effectiveDistance: CGFloat = 1500.0 // Very far from anchor
+        let maxScale: CGFloat = 10.0 // Dynamic mode cap
+
+        let scaleFactor = min(effectiveDistance / 100.0, maxScale)
+        XCTAssertEqual(scaleFactor, 10.0, accuracy: 0.001, "Dynamic mode scale factor should cap at 10.0")
+    }
+
+    func testDynamicModeWithSpeedMultiplier() throws {
+        // Test that speed multiplier is applied on top of dynamic scaling
+        let effectiveDistance: CGFloat = 500.0
+        let speedMultiplier: CGFloat = 1.5 // "Fast" preset
+        let maxScale: CGFloat = 10.0 // Dynamic mode
+
+        let baseScale = min(effectiveDistance / 100.0, maxScale)
+        let scaledFactor = baseScale * speedMultiplier
+
+        // At 500px with Fast preset: 5.0 * 1.5 = 7.5x effective speed
+        XCTAssertEqual(scaledFactor, 7.5, accuracy: 0.001, "Dynamic mode with Fast preset should give 7.5x at 500px")
     }
 }
 

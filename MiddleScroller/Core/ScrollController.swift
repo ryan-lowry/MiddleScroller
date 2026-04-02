@@ -51,7 +51,9 @@ final class ScrollController {
         let effectiveDistance = distance - deadZone
 
         // Scale factor: more distance = faster scroll
-        let scaleFactor = min(effectiveDistance / 100.0, 1.0) * speedMultiplier
+        // In dynamic mode, allow scale to grow up to 10x; in static mode, cap at 1x
+        let maxScale: CGFloat = PreferencesManager.shared.isDynamicSpeed ? 10.0 : 1.0
+        let scaleFactor = min(effectiveDistance / 100.0, maxScale) * speedMultiplier
 
         // Calculate scroll amounts
         // Note: macOS scroll coordinates are inverted compared to mouse movement
