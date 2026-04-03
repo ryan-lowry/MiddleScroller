@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
   release:
     types: [ created ]
 
@@ -39,11 +40,11 @@ jobs:
           test
 
     - name: Install create-dmg
-      if: github.event_name == 'release'
+      if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
       run: brew install create-dmg
 
     - name: Create DMG
-      if: github.event_name == 'release'
+      if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
       run: |
         cd MiddleScroller
 
@@ -73,6 +74,14 @@ jobs:
         files: MiddleScroller/MiddleScroller.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload DMG Artifact
+      if: github.event_name == 'workflow_dispatch'
+      uses: actions/upload-artifact@v4
+      with:
+        name: MiddleScroller-dmg
+        path: MiddleScroller/MiddleScroller.dmg
+        retention-days: 7
 
     - name: Upload Build Artifact
       if: github.event_name != 'release'
